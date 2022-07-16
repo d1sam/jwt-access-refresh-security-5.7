@@ -33,13 +33,11 @@ public class TokenService {
 
     private static final String ROLES_CLAIM = "roles";
 
-    private final Date expirationDateOfAccessToken
-            // current time + 60 mins * 60 secs * 1000 msecs
-            = new Date(System.currentTimeMillis() + 60 * 60 * 1000);
+    // 60 minutes
+    private static final long HOUR = 60 * 60 * 1000;
 
-    private final Date expirationDateOfRefreshToken
-            // current time + 30 days + 24 hours + 60 mins * 60 secs * 1000 msecs
-            = new Date(System.currentTimeMillis() + 30L * 24 * 60 * 60 * 1000);
+    // 30 days
+    private static final long MONTH = 30L * 24 * 60 * 60 * 1000;
 
     public UsernamePasswordAuthenticationToken decodeAccessToken(String token) {
         DecodedJWT decodedJWT = getDecodedJWTFromToken(token);
@@ -47,9 +45,7 @@ public class TokenService {
         String[] roles = decodedJWT.getClaim(ROLES_CLAIM).asArray(String.class);
         Collection<SimpleGrantedAuthority> authorities = new ArrayList<>();
         stream(roles).forEach(role -> authorities.add(new SimpleGrantedAuthority(role)));
-        UsernamePasswordAuthenticationToken authenticationToken =
-                new UsernamePasswordAuthenticationToken(username, null, authorities);
-        return authenticationToken;
+        return new UsernamePasswordAuthenticationToken(username, null, authorities);
     }
 
     public String verifyRefreshAndGetNewAccessToken(String refreshToken, String issuer) {
@@ -62,7 +58,7 @@ public class TokenService {
     public String generateAccessTokenForUserFromSecurityContextHolder(String issuer, User user) {
         return JWT.create()
                 .withSubject(user.getUsername())
-                .withExpiresAt(expirationDateOfAccessToken)
+                .withExpiresAt(getExpirationDateOfToken(HOUR))
                 .withIssuer(issuer)
                 .withClaim(ROLES_CLAIM, user.getAuthorities().stream().map(GrantedAuthority::getAuthority).collect(Collectors.toList()))
                 .sign(getAlgorithm());
@@ -71,7 +67,7 @@ public class TokenService {
     public String generateRefreshToken(String issuer, User user) {
         return JWT.create()
                 .withSubject(user.getUsername())
-                .withExpiresAt(expirationDateOfRefreshToken)
+                .withExpiresAt(getExpirationDateOfToken(MONTH))
                 .withIssuer(issuer)
                 .sign(getAlgorithm());
     }
@@ -79,7 +75,7 @@ public class TokenService {
     public String generateAccessTokenForUserFromDB(String issuer, com.dataart.jwtspringboot.domain.User user) {
         return JWT.create()
                 .withSubject(user.getUsername())
-                .withExpiresAt(expirationDateOfAccessToken)
+                .withExpiresAt(getExpirationDateOfToken(HOUR))
                 .withIssuer(issuer)
                 .withClaim(ROLES_CLAIM, user.getRoles().stream().map(Role::getName).collect(Collectors.toList()))
                 .sign(getAlgorithm());
@@ -101,5 +97,9 @@ public class TokenService {
     private DecodedJWT getDecodedJWTFromToken(String token) {
         JWTVerifier jwtVerifier = JWT.require(getAlgorithm()).build();
         return jwtVerifier.verify(token);
+    }
+
+    private Date getExpirationDateOfToken(long time) {
+        return new Date(System.currentTimeMillis() + time);
     }
 }
